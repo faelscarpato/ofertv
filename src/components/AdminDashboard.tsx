@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Trash2, GripVertical, MonitorPlay, Plus } from 'lucide-react';
+import { Trash2, GripVertical, MonitorPlay, Plus, UploadCloud, Link as LinkIcon } from 'lucide-react';
 
 type MediaItem = { 
   id: string; 
@@ -14,6 +14,9 @@ type MediaItem = {
 
 export default function AdminDashboard() {
   const [url, setUrl] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [inputMode, setInputMode] = useState<'upload' | 'link'>('upload');
+  
   const [type, setType] = useState<'image' | 'video'>('image');
   const [duration, setDuration] = useState(10);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -34,15 +37,48 @@ export default function AdminDashboard() {
 
   const handleAddMedia = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url) return;
     setLoading(true);
+    let finalUrl = url;
+
+    if (inputMode === 'upload') {
+      if (!file) {
+        alert('Selecione um arquivo primeiro.');
+        setLoading(false);
+        return;
+      }
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('ofertv-media')
+        .upload(fileName, file);
+
+      if (uploadError) {
+        console.error(uploadError);
+        alert('Erro ao fazer upload do arquivo. O bucket "ofertv-media" foi criado e é público?');
+        setLoading(false);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('ofertv-media')
+        .getPublicUrl(fileName);
+        
+      finalUrl = publicUrlData.publicUrl;
+    } else {
+      if (!url) {
+        setLoading(false);
+        return;
+      }
+    }
 
     const nextOrderIndex = mediaItems.length > 0 
       ? Math.max(...mediaItems.map(m => m.order_index)) + 1 
       : 0;
     
     const newItem = {
-      url,
+      url: finalUrl,
       media_type: type,
       duration: type === 'image' ? duration : 0,
       order_index: nextOrderIndex,
@@ -52,19 +88,32 @@ export default function AdminDashboard() {
     
     if (!error) {
       setUrl('');
+      setFile(null);
+      // Reset the file input visually
+      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
       await fetchMedia();
     } else {
       console.error(error);
-      alert('Erro ao adicionar mídia.');
+      alert('Erro ao adicionar mídia no banco de dados.');
     }
     setLoading(false);
   };
 
-  const handleRemoveMedia = async (id: string) => {
+  const handleRemoveMedia = async (id: string, mediaUrl: string) => {
     if (!confirm('Deseja realmente remover esta mídia?')) return;
     
+    // Deleta do banco de dados
     const { error } = await supabase.from('media').delete().eq('id', id);
+    
     if (!error) {
+      // Tenta deletar o arquivo do Storage se for um arquivo upado (contém ofertv-media na URL)
+      if (mediaUrl.includes('ofertv-media')) {
+        const urlParts = mediaUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        await supabase.storage.from('ofertv-media').remove([fileName]);
+      }
       await fetchMedia();
     } else {
       console.error(error);
@@ -101,16 +150,57 @@ export default function AdminDashboard() {
             </h2>
             <form onSubmit={handleAddMedia} className="space-y-5">
               
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-400">URL da Mídia</label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://sua-imagem.com/oferta.jpg"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-700"
-                />
+              {/* Tabs de Seleção: Upload vs Link */}
+              <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('upload')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${
+                    inputMode === 'upload' ? 'bg-slate-800 text-cyan-400 shadow' : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <UploadCloud className="w-4 h-4" /> Upload
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode('link')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${
+                    inputMode === 'link' ? 'bg-slate-800 text-cyan-400 shadow' : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <LinkIcon className="w-4 h-4" /> Link URL
+                </button>
               </div>
+
+              {inputMode === 'upload' ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Arquivo de Mídia</label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0];
+                      if (selected) {
+                        setFile(selected);
+                        setType(selected.type.startsWith('video') ? 'video' : 'image');
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 transition-all text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700 cursor-pointer"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">URL da Mídia</label>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://sua-imagem.com/oferta.jpg"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-700"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -143,7 +233,7 @@ export default function AdminDashboard() {
                 disabled={loading}
                 className="w-full mt-4 bg-transparent border-2 border-cyan-500 text-cyan-400 hover:bg-cyan-500 hover:text-slate-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] uppercase tracking-widest text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Adicionando...' : 'Adicionar à Fila'}
+                {loading ? 'Enviando...' : 'Adicionar à Fila'}
               </button>
             </form>
           </section>
@@ -177,7 +267,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <button 
-                    onClick={() => handleRemoveMedia(item.id)}
+                    onClick={() => handleRemoveMedia(item.id, item.url)}
                     className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                   >
                     <Trash2 className="w-5 h-5" />
