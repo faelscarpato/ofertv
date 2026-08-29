@@ -13,16 +13,38 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OferTV Admin",
-  description: "Gerenciador de Mídia e Digital Signage",
+    title: "OferTV — Digital Signage & TV de Ofertas PWA",
+  description: "Sistema de sinalização digital, mídia indoor e geração automatizada de cartazes promocionais para varejo e supermercados.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "OferTV",
+    title: "OferTV — Digital Signage & TV de Ofertas PWA",
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    title: "OferTV — Digital Signage & TV de Ofertas PWA",
+    description: "Sistema de sinalização digital, mídia indoor e geração automatizada de cartazes promocionais para varejo e supermercados.",
+    url: "https://ofertv.pages.dev",
+    siteName: "OferTV — Digital Signage & TV de Ofertas PWA",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "OferTV — Digital Signage & TV de Ofertas PWA",
+      }
+    ],
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OferTV — Digital Signage & TV de Ofertas PWA",
+    description: "Sistema de sinalização digital, mídia indoor e geração automatizada de cartazes promocionais para varejo e supermercados.",
+    images: ["/og-image.jpg"],
   },
 };
 
