@@ -652,7 +652,7 @@ export default function AdminDashboard() {
       if (audio.url.includes(BUCKET_NAME)) {
         const parts = audio.url.split(`${BUCKET_NAME}/`);
         if (parts.length > 1) {
-          const rawPath = decodeURIComponent(parts.split('?')[0]);
+          const rawPath = decodeURIComponent(parts[1].split('?')[0]);
           await supabase.storage.from(BUCKET_NAME).remove([rawPath]);
         }
       }
@@ -695,7 +695,7 @@ export default function AdminDashboard() {
         try {
           const parts = item.url.split(`${BUCKET_NAME}/`);
           if (parts.length > 1) {
-            const rawPath = decodeURIComponent(parts.split('?')[0]);
+            const rawPath = decodeURIComponent(parts[1].split('?')[0]);
             await supabase.storage.from(BUCKET_NAME).remove([rawPath]);
           }
         } catch (sErr) {
