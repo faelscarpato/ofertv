@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     siteName: "OferTV — Digital Signage & TV de Ofertas PWA",
     images: [
       {
-        url: "/og-image.jpg",
+        url: "https://ofertv.pages.dev/og-image.jpg",
         width: 1200,
         height: 630,
         alt: "OferTV — Digital Signage & TV de Ofertas PWA",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "OferTV — Digital Signage & TV de Ofertas PWA",
     description: "Sistema de sinalização digital, mídia indoor e geração automatizada de cartazes promocionais para varejo e supermercados.",
-    images: ["/og-image.jpg"],
+    images: ["https://ofertv.pages.dev/og-image.jpg"],
   },
 };
 
