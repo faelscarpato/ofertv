@@ -22,11 +22,7 @@ import {
   Sparkles,
   Wand2,
   Music,
-  Sliders,
   Volume2,
-  MoveHorizontal,
-  Maximize2,
-  RefreshCw,
 } from 'lucide-react';
 
 const BUCKET_NAME = 'ofertv-media';
@@ -116,10 +112,9 @@ export default function AdminDashboard() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Abas: 'template' (Estúdio), 'upload' (Upload de Mídia), 'url' (Link Externo), 'audio' (Playlist de Música)
   const [activeTab, setActiveTab] = useState<'template' | 'upload' | 'url' | 'audio'>('template');
 
-  // --- ESTADOS DO ESTÚDIO DE CARTAZES ---
+  // Estados do Estúdio
   const [productTitle, setProductTitle] = useState<string>('Picanha Bovina Peça');
   const [priceFrom, setPriceFrom] = useState<string>('69,90');
   const [priceTo, setPriceTo] = useState<string>('49,90');
@@ -133,7 +128,7 @@ export default function AdminDashboard() {
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
 
-  // --- ESTADOS DO UPLOAD DE MÍDIA ---
+  // Estados do Upload
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState<string>('');
@@ -141,16 +136,15 @@ export default function AdminDashboard() {
   const [uploadAspectRatio, setUploadAspectRatio] = useState<AspectRatio>('16:9');
   const [uploadDuration, setUploadDuration] = useState<number>(10);
   const [uploadTransition, setUploadTransition] = useState<TransitionType>('fade');
-  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // --- ESTADOS DO LINK EXTERNO ---
+  // Estados de Link URL
   const [customUrl, setCustomUrl] = useState<string>('');
   const [urlTitle, setUrlTitle] = useState<string>('');
   const [urlMediaType, setUrlMediaType] = useState<MediaType>('image');
   const [urlDuration, setUrlDuration] = useState<number>(10);
   const [urlTransition, setUrlTransition] = useState<TransitionType>('fade');
 
-  // --- ESTADOS DA PLAYLIST DE ÁUDIO ---
+  // Estados de Áudio
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioTitle, setAudioTitle] = useState<string>('');
   const [audioUrl, setAudioUrl] = useState<string>('');
@@ -174,7 +168,7 @@ export default function AdminDashboard() {
       setItems((mediaRes.data as MediaItem[]) || []);
       setAudioItems((audioRes.data as AudioItem[]) || []);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao listar dados';
+      const msg = err instanceof Error ? err.message : 'Erro ao listar mídias';
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsLoading(false);
@@ -188,7 +182,7 @@ export default function AdminDashboard() {
   const processImageToWebP = async (
     imageSource: HTMLImageElement | File,
     aspectRatio: AspectRatio = '16:9'
-  ): Promise<Blob> => {
+  ): Promise<File> => {
     let img: HTMLImageElement;
 
     if (imageSource instanceof File) {
@@ -237,19 +231,21 @@ export default function AdminDashboard() {
 
     ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
 
-    return new Promise((resolve, reject) => {
+    const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Falha ao exportar WebP'));
+        (b) => {
+          if (b) resolve(b);
+          else reject(new Error('Falha na conversão WebP'));
         },
         'image/webp',
         0.85
       );
     });
+
+    return new File([blob], `processed-${Date.now()}.webp`, { type: 'image/webp' });
   };
 
-  // Renderizador do Canvas de Ofertas com Tipografia Corrigida
+  // Renderizador do Canvas
   const renderTemplateCanvas = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -264,16 +260,16 @@ export default function AdminDashboard() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 1. Fundo
+    // Fundo
     ctx.fillStyle = selectedTheme.bgColor;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Cabeçalho
+    // Cabeçalho
     const headerHeight = isHorizontal ? 160 : 220;
     ctx.fillStyle = selectedTheme.headerBg;
     ctx.fillRect(0, 0, width, headerHeight);
 
-    // 3. Selo de Destaque
+    // Selo
     if (badgeText.trim()) {
       ctx.save();
       const badgeWidth = isHorizontal ? 500 : 620;
@@ -294,7 +290,7 @@ export default function AdminDashboard() {
       ctx.restore();
     }
 
-    // 4. Card da Foto do Produto
+    // Card do Produto
     const cardMarginX = isHorizontal ? 80 : 60;
     const cardMarginY = isHorizontal ? 200 : 260;
     const cardWidth = isHorizontal ? 900 : width - cardMarginX * 2;
@@ -307,9 +303,10 @@ export default function AdminDashboard() {
     ctx.fill();
     ctx.restore();
 
-    // 5. Imagem do Produto
+    // Imagem do Produto
     if (productImagePreview) {
       const pImg = new Image();
+      pImg.crossOrigin = 'anonymous';
       pImg.src = productImagePreview;
       await new Promise((res) => {
         pImg.onload = res;
@@ -341,11 +338,10 @@ export default function AdminDashboard() {
       ctx.fillText('Foto do Produto', cardMarginX + cardWidth / 2, cardMarginY + cardHeight / 2);
     }
 
-    // 6. Coluna de Informações e Preço
+    // Informações de Preço
     const infoX = isHorizontal ? 1040 : width / 2;
     const infoStartY = isHorizontal ? 270 : 1220;
 
-    // Título do Produto
     ctx.save();
     ctx.fillStyle = selectedTheme.titleColor;
     ctx.font = `bold ${isHorizontal ? 64 : 70}px sans-serif`;
@@ -354,7 +350,6 @@ export default function AdminDashboard() {
     ctx.fillText(productTitle || 'Nome do Produto', infoX, infoStartY, isHorizontal ? 800 : width - 120);
     ctx.restore();
 
-    // Preço "De" Riscado
     if (priceFrom.trim()) {
       const fromY = infoStartY + (isHorizontal ? 100 : 110);
       ctx.save();
@@ -376,7 +371,6 @@ export default function AdminDashboard() {
       ctx.restore();
     }
 
-    // Label "POR APENAS"
     const porY = infoStartY + (isHorizontal ? 190 : 210);
     ctx.save();
     ctx.fillStyle = selectedTheme.accentColor;
@@ -386,7 +380,6 @@ export default function AdminDashboard() {
     ctx.fillText('POR APENAS', infoX, porY);
     ctx.restore();
 
-    // Preço Principal com Medição Correta
     const priceBaselineY = porY + (isHorizontal ? 170 : 190);
 
     const prefixFont = `bold ${isHorizontal ? 56 : 64}px sans-serif`;
@@ -432,7 +425,6 @@ export default function AdminDashboard() {
     }
     ctx.restore();
 
-    // 7. Rodapé
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     const footerH = isHorizontal ? 75 : 95;
     ctx.fillRect(0, height - footerH, width, footerH);
@@ -473,7 +465,7 @@ export default function AdminDashboard() {
         canvas.toBlob(
           (b) => {
             if (b) resolve(b);
-            else reject(new Error('Erro na conversão do cartaz'));
+            else reject(new Error('Erro na exportação do cartaz'));
           },
           'image/webp',
           0.9
@@ -482,14 +474,19 @@ export default function AdminDashboard() {
 
       const uniqueId = `cartaz-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const fileName = `banners/${uniqueId}.webp`;
+      const fileToUpload = new File([blob], `${uniqueId}.webp`, { type: 'image/webp' });
 
-      const { error: uploadErr } = await supabase.storage.from(BUCKET_NAME).upload(fileName, blob, {
-        contentType: 'image/webp',
-        cacheControl: '3600',
-        upsert: false,
-      });
+      const { error: uploadErr } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(fileName, fileToUpload, {
+          contentType: 'image/webp',
+          cacheControl: '3600',
+          upsert: true,
+        });
 
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        throw new Error(`Falha no Storage: ${uploadErr.message}`);
+      }
 
       const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
       const publicUrl = urlData.publicUrl;
@@ -510,7 +507,7 @@ export default function AdminDashboard() {
 
       if (dbErr) throw dbErr;
 
-      setStatusMessage({ type: 'success', text: `Cartaz gerado e programado para ${templateDuration}s na TV!` });
+      setStatusMessage({ type: 'success', text: `Cartaz publicado com sucesso na TV (${templateDuration}s)!` });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao publicar cartaz';
@@ -532,12 +529,12 @@ export default function AdminDashboard() {
       setIsSaving(true);
       setStatusMessage(null);
 
-      let uploadPayload: Blob | File = uploadFile;
+      let fileToUpload: File = uploadFile;
       let finalExt = uploadFile.name.split('.').pop()?.toLowerCase() || 'bin';
-      let contentType = uploadFile.type;
+      let contentType = uploadFile.type || 'application/octet-stream';
 
       if (uploadMediaType === 'image') {
-        uploadPayload = await processImageToWebP(uploadFile, uploadAspectRatio);
+        fileToUpload = await processImageToWebP(uploadFile, uploadAspectRatio);
         finalExt = 'webp';
         contentType = 'image/webp';
       }
@@ -545,11 +542,13 @@ export default function AdminDashboard() {
       const uniqueId = `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const fileName = `${uploadMediaType}s/${uniqueId}.${finalExt}`;
 
-      const { error: uploadErr } = await supabase.storage.from(BUCKET_NAME).upload(fileName, uploadPayload, {
-        contentType,
-        cacheControl: '3600',
-        upsert: false,
-      });
+      const { error: uploadErr } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(fileName, fileToUpload, {
+          contentType,
+          cacheControl: '3600',
+          upsert: true,
+        });
 
       if (uploadErr) throw uploadErr;
 
@@ -575,7 +574,7 @@ export default function AdminDashboard() {
       setUploadFile(null);
       setUploadPreview(null);
       setUploadTitle('');
-      setStatusMessage({ type: 'success', text: 'Mídia salva e publicada na TV!' });
+      setStatusMessage({ type: 'success', text: 'Mídia salva e publicada com sucesso!' });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao processar mídia';
@@ -585,7 +584,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Ação: Inserção de Áudio / Música
+  // Ação: Adicionar Áudio
   const handleAddAudioSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
@@ -600,11 +599,13 @@ export default function AdminDashboard() {
         const uniqueId = `audio-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const fileName = `audios/${uniqueId}.${fileExt}`;
 
-        const { error: uploadErr } = await supabase.storage.from(BUCKET_NAME).upload(fileName, audioFile, {
-          contentType: audioFile.type || 'audio/mpeg',
-          cacheControl: '3600',
-          upsert: false,
-        });
+        const { error: uploadErr } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(fileName, audioFile, {
+            contentType: audioFile.type || 'audio/mpeg',
+            cacheControl: '3600',
+            upsert: true,
+          });
 
         if (uploadErr) throw uploadErr;
 
@@ -613,7 +614,7 @@ export default function AdminDashboard() {
       } else if (audioUrl.trim()) {
         finalAudioUrl = audioUrl.trim();
       } else {
-        setStatusMessage({ type: 'error', text: 'Selecione um arquivo de áudio ou informe uma URL.' });
+        setStatusMessage({ type: 'error', text: 'Informe um arquivo de áudio ou uma URL.' });
         setIsSaving(false);
         return;
       }
@@ -622,7 +623,7 @@ export default function AdminDashboard() {
 
       const { error: dbErr } = await supabase.from('audios').insert([
         {
-          title: audioTitle.trim() || 'Música / Locução Comercial',
+          title: audioTitle.trim() || 'Faixa de Áudio',
           url: finalAudioUrl,
           order_index: nextIndex,
           is_active: true,
@@ -634,7 +635,7 @@ export default function AdminDashboard() {
       setAudioFile(null);
       setAudioTitle('');
       setAudioUrl('');
-      setStatusMessage({ type: 'success', text: 'Faixa de áudio adicionada à playlist com sucesso!' });
+      setStatusMessage({ type: 'success', text: 'Áudio adicionado à playlist da TV!' });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar áudio';
@@ -660,7 +661,7 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('audios').delete().eq('id', audio.id);
       if (error) throw error;
 
-      setStatusMessage({ type: 'success', text: 'Áudio removido da playlist.' });
+      setStatusMessage({ type: 'success', text: 'Áudio excluído.' });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao excluir áudio';
@@ -680,7 +681,7 @@ export default function AdminDashboard() {
       if (error) throw error;
       await fetchItems();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao alterar status do áudio';
+      const msg = err instanceof Error ? err.message : 'Erro ao alternar status do áudio';
       setStatusMessage({ type: 'error', text: msg });
     }
   };
@@ -773,7 +774,7 @@ export default function AdminDashboard() {
               <h1 className="text-3xl font-bold tracking-tight text-white">OferTV Studio & Sound</h1>
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Controle de tempo, transições visuais dinâmicas e playlist de rádio/áudio independente para PDV.
+              Estúdio de cartazes digitais, otimização WebP e playlist contínua de áudio para varejo.
             </p>
           </div>
           <a
@@ -804,7 +805,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Abas de Navegação */}
         <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
           <button
             onClick={() => setActiveTab('template')}
@@ -839,7 +839,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Music className="h-4 w-4 text-purple-300" />
-            Rádio & Trilha Sonora ({audioItems.length})
+            Rádio & Músicas ({audioItems.length})
           </button>
 
           <button
@@ -856,7 +856,6 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          {/* Coluna Esquerda: Ferramentas */}
           <div className="lg:col-span-7 space-y-6">
             {activeTab === 'template' && (
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-6">
@@ -945,7 +944,6 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Controle de Tempo e Transição no Estúdio */}
                   <div>
                     <label className="block text-xs font-semibold uppercase text-slate-400">
                       Duração na TV (Segundos)
@@ -970,10 +968,10 @@ export default function AdminDashboard() {
                       onChange={(e) => setTemplateTransition(e.target.value as TransitionType)}
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
                     >
-                      <option value="fade">Dissolver (Fade Suave)</option>
-                      <option value="slide">Deslizar Lateral (Slide)</option>
-                      <option value="zoom">Aproximar (Zoom In)</option>
-                      <option value="flip">Girar em 3D (Flip)</option>
+                      <option value="fade">Dissolver (Fade)</option>
+                      <option value="slide">Deslizar (Slide)</option>
+                      <option value="zoom">Aproximar (Zoom)</option>
+                      <option value="flip">Girar (Flip 3D)</option>
                     </select>
                   </div>
 
@@ -1043,7 +1041,7 @@ export default function AdminDashboard() {
                   disabled={isSaving}
                   className="w-full rounded-lg bg-gradient-to-r from-amber-500 to-cyan-500 py-3.5 font-bold text-slate-950 shadow-xl transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {isSaving ? 'Publicando...' : `Renderizar e Publicar (${templateDuration}s na TV)`}
+                  {isSaving ? 'Enviando...' : `Renderizar e Publicar (${templateDuration}s na TV)`}
                 </button>
               </div>
             )}
@@ -1052,7 +1050,7 @@ export default function AdminDashboard() {
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
                   <UploadCloud className="h-5 w-5 text-cyan-400" />
-                  Upload de Mídia com Auto-Crop e Transição
+                  Upload Direto de Mídia
                 </h2>
 
                 <form onSubmit={handleUploadFileSubmit} className="space-y-4">
@@ -1062,7 +1060,7 @@ export default function AdminDashboard() {
                       type="text"
                       value={uploadTitle}
                       onChange={(e) => setUploadTitle(e.target.value)}
-                      placeholder="Ex: Vídeo Institucional Açougue"
+                      placeholder="Ex: Vídeo de Ofertas Açougue"
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
@@ -1136,7 +1134,7 @@ export default function AdminDashboard() {
                     >
                       <UploadCloud className="h-10 w-10 text-cyan-400 mb-2" />
                       <p className="text-sm font-medium text-white">Clique para selecionar imagem ou vídeo</p>
-                      <p className="mt-1 text-xs text-slate-400">Otimização automática para WebP Full HD</p>
+                      <p className="mt-1 text-xs text-slate-400">Conversão automática para WebP</p>
                     </div>
                   ) : (
                     <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
@@ -1172,13 +1170,12 @@ export default function AdminDashboard() {
                     disabled={isSaving}
                     className="w-full rounded-lg bg-cyan-600 py-3 font-semibold text-white shadow-lg hover:bg-cyan-500 disabled:opacity-50"
                   >
-                    {isSaving ? 'Processando...' : 'Salvar Mídia na TV'}
+                    {isSaving ? 'Enviando...' : 'Salvar Mídia na TV'}
                   </button>
                 </form>
               </div>
             )}
 
-            {/* ABA DE ÁUDIO / MÚSICAS & LOCUÇÃO */}
             {activeTab === 'audio' && (
               <div className="rounded-xl border border-purple-900/60 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <div className="flex items-center justify-between">
@@ -1190,9 +1187,6 @@ export default function AdminDashboard() {
                     Áudio Independente
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Os áudios cadastrados abaixo tocam em sequência contínua (loop) na TV, sem parar ou reiniciar quando as imagens das ofertas mudam.
-                </p>
 
                 <form onSubmit={handleAddAudioSubmit} className="space-y-4 rounded-lg bg-slate-950 p-4 border border-slate-800">
                   <div>
@@ -1201,7 +1195,7 @@ export default function AdminDashboard() {
                       type="text"
                       value={audioTitle}
                       onChange={(e) => setAudioTitle(e.target.value)}
-                      placeholder="Ex: Música Ambiente Sertanejo / Vinheta Açougue"
+                      placeholder="Ex: Música Ambiente / Vinheta Promocional"
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
@@ -1229,7 +1223,7 @@ export default function AdminDashboard() {
                       className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-purple-800 bg-purple-950/20 py-4 text-xs font-semibold text-purple-300 hover:bg-purple-950/40"
                     >
                       <Volume2 className="h-4 w-4" />
-                      {audioFile ? `Selecionado: ${audioFile.name}` : 'Clique para selecionar arquivo de áudio'}
+                      {audioFile ? `Selecionado: ${audioFile.name}` : 'Selecionar arquivo de áudio'}
                     </button>
                   </div>
 
@@ -1253,9 +1247,8 @@ export default function AdminDashboard() {
                   </button>
                 </form>
 
-                {/* Lista de Áudios Ativos */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Playlist Atual ({audioItems.length} faixas)</h3>
+                  <h3 className="text-sm font-semibold text-white">Playlist de Áudio ({audioItems.length} faixas)</h3>
                   {audioItems.length === 0 ? (
                     <p className="text-xs text-slate-500 py-4 text-center">Nenhum áudio cadastrado.</p>
                   ) : (
@@ -1276,7 +1269,7 @@ export default function AdminDashboard() {
                                 audio.is_active ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'
                               }`}
                             >
-                              {audio.is_active ? 'Tocando' : 'Pausado'}
+                              {audio.is_active ? 'Ativo' : 'Pausado'}
                             </button>
                             <button
                               onClick={() => handleDeleteAudio(audio)}
@@ -1351,7 +1344,6 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Coluna Direita: Grade de TV */}
           <div className="lg:col-span-5">
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
