@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase, MediaItem, AudioItem, TransitionType } from '@/lib/supabaseClient';
+import { supabase, MediaItem, AudioItem, TransitionType, parseAudioSource, ParsedAudio } from '@/lib/supabaseClient';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import {
   Tv,
@@ -15,6 +15,7 @@ import {
   Volume2,
   VolumeX,
   Music,
+  Radio,
 } from 'lucide-react';
 
 const transitionVariants: Record<TransitionType, Variants> = {
@@ -41,7 +42,6 @@ const transitionVariants: Record<TransitionType, Variants> = {
 };
 
 export default function TVPlayer() {
-  // Estados Visuais
   const [playlist, setPlaylist] = useState<MediaItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -51,11 +51,10 @@ export default function TVPlayer() {
   const [showControls, setShowControls] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Estados da Trilha Sonora / Áudios Independentes
+  // Estados de Trilha Sonora
   const [audioList, setAudioList] = useState<AudioItem[]>([]);
   const [currentAudioIndex, setCurrentAudioIndex] = useState<number>(0);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(true);
-  const [audioVolume, setAudioVolume] = useState<number>(0.8);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -63,7 +62,6 @@ export default function TVPlayer() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
-  // Carregar Mídias Visuais
   const fetchPlaylist = useCallback(async () => {
     try {
       setErrorMessage(null);
@@ -76,14 +74,13 @@ export default function TVPlayer() {
       if (error) throw error;
       setPlaylist((data as MediaItem[]) || []);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao sincronizar playlist visual';
+      const msg = err instanceof Error ? err.message : 'Erro na sincronização de mídias';
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Carregar Playlist de Áudios
   const fetchAudios = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -95,11 +92,10 @@ export default function TVPlayer() {
       if (error) throw error;
       setAudioList((data as AudioItem[]) || []);
     } catch (err) {
-      console.warn('Erro ao carregar lista de áudio:', err);
+      console.warn('Erro ao sincronizar áudios:', err);
     }
   }, []);
 
-  // Gestão de Tela Cheia
   const toggleFullscreen = useCallback(async () => {
     try {
       if (!document.fullscreenElement) {
@@ -112,7 +108,7 @@ export default function TVPlayer() {
         }
       }
     } catch (err) {
-      console.warn('Fullscreen bloqueado ou indisponível:', err);
+      console.warn('Fullscreen indisponível:', err);
     }
   }, []);
 
@@ -124,7 +120,6 @@ export default function TVPlayer() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Auto-hide dos controles
   const handleUserInteraction = useCallback(() => {
     setShowControls(true);
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
@@ -133,7 +128,6 @@ export default function TVPlayer() {
     }, 3500);
   }, []);
 
-  // Atalhos de teclado (F = Tela Cheia, Espaço = Pausa Visual, M = Mute Áudio)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'f' || e.key === 'F') {
@@ -152,20 +146,19 @@ export default function TVPlayer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleFullscreen]);
 
-  // Inicialização e Inscrição Realtime
   useEffect(() => {
     fetchPlaylist();
     fetchAudios();
 
     const mediaChannel = supabase
-      .channel('tv-media-realtime')
+      .channel('tv-media-feed')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'media' }, () => {
         fetchPlaylist();
       })
       .subscribe();
 
     const audioChannel = supabase
-      .channel('tv-audio-realtime')
+      .channel('tv-audio-feed')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'audios' }, () => {
         fetchAudios();
       })
@@ -187,7 +180,6 @@ export default function TVPlayer() {
     };
   }, [fetchPlaylist, fetchAudios]);
 
-  // Avanço da Playlist Visual
   const advanceSlide = useCallback(() => {
     setPlaylist((prevList) => {
       if (prevList.length <= 1) return prevList;
@@ -196,7 +188,6 @@ export default function TVPlayer() {
     });
   }, []);
 
-  // Temporizador de Imagens Visuais
   useEffect(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -219,7 +210,6 @@ export default function TVPlayer() {
     }
   }, [currentIndex, playlist, isPaused, advanceSlide]);
 
-  // Gerenciamento da Playlist de Áudio Contínua
   const advanceAudio = useCallback(() => {
     setAudioList((prevList) => {
       if (prevList.length <= 1) return prevList;
@@ -227,13 +217,6 @@ export default function TVPlayer() {
       return prevList;
     });
   }, []);
-
-  useEffect(() => {
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.volume = audioVolume;
-      audioPlayerRef.current.muted = isAudioMuted;
-    }
-  }, [audioVolume, isAudioMuted]);
 
   const toggleSound = () => {
     setIsAudioMuted((prev) => {
@@ -260,7 +243,7 @@ export default function TVPlayer() {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
         <AlertCircle className="mb-4 h-16 w-16 text-rose-500" />
-        <h1 className="text-2xl font-bold">Sem Conexão com o Servidor</h1>
+        <h1 className="text-2xl font-bold">Falha de Conexão</h1>
         <p className="mt-2 max-w-md text-zinc-400">{errorMessage}</p>
         <button
           onClick={() => {
@@ -280,7 +263,7 @@ export default function TVPlayer() {
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-zinc-950 text-white">
         <Tv className="mb-4 h-20 w-20 text-zinc-600" />
         <h2 className="text-2xl font-semibold text-zinc-300">Aguardando Grade de Ofertas</h2>
-        <p className="mt-2 text-zinc-500">Cadastre ou crie cartazes no painel /admin para iniciar a exibição.</p>
+        <p className="mt-2 text-zinc-500">Cadastre cartazes ou mídias no painel /admin para iniciar.</p>
       </div>
     );
   }
@@ -288,6 +271,7 @@ export default function TVPlayer() {
   const currentMedia = playlist[currentIndex] || playlist[0];
   const activeTransition: TransitionType = currentMedia.transition_type || 'fade';
   const currentAudio = audioList[currentAudioIndex];
+  const parsedAudio: ParsedAudio | null = currentAudio ? parseAudioSource(currentAudio.url) : null;
 
   return (
     <div
@@ -297,16 +281,36 @@ export default function TVPlayer() {
       className="relative h-screen w-screen overflow-hidden bg-black select-none cursor-default"
       style={{ perspective: 1000 }}
     >
-      {/* Player de Áudio Independente (Ininterrupto) */}
-      {currentAudio && (
+      {/* 1. Player de Áudio Nativo (MP3 / Direct Stream) */}
+      {!isAudioMuted && parsedAudio && parsedAudio.type === 'direct' && (
         <audio
           ref={audioPlayerRef}
-          src={currentAudio.url}
+          src={parsedAudio.embedUrl}
           autoPlay
           playsInline
           onEnded={advanceAudio}
           onError={advanceAudio}
           className="hidden"
+        />
+      )}
+
+      {/* 2. Player de Áudio do YouTube / YouTube Music (Executado em Fundo) */}
+      {!isAudioMuted && parsedAudio && parsedAudio.type === 'youtube' && (
+        <iframe
+          src={parsedAudio.embedUrl}
+          allow="autoplay; encrypted-media"
+          className="pointer-events-none fixed -top-[9999px] -left-[9999px] h-10 w-10 opacity-0"
+          title="YouTube Audio Stream"
+        />
+      )}
+
+      {/* 3. Player de Áudio do SoundCloud (Executado em Fundo) */}
+      {!isAudioMuted && parsedAudio && parsedAudio.type === 'soundcloud' && (
+        <iframe
+          src={parsedAudio.embedUrl}
+          allow="autoplay"
+          className="pointer-events-none fixed -top-[9999px] -left-[9999px] h-10 w-10 opacity-0"
+          title="SoundCloud Audio Stream"
         />
       )}
 
@@ -318,7 +322,7 @@ export default function TVPlayer() {
         </div>
       )}
 
-      {/* Controles Flutuantes Inteligentes */}
+      {/* Controles Flutuantes com Auto-Hide */}
       <AnimatePresence>
         {showControls && (
           <motion.div
@@ -328,7 +332,6 @@ export default function TVPlayer() {
             transition={{ duration: 0.2 }}
             className="absolute top-4 right-4 z-50 flex items-center gap-2 rounded-2xl bg-slate-950/85 p-2 shadow-2xl backdrop-blur-md border border-slate-800"
           >
-            {/* Controle de Áudio / Trilha Sonora */}
             {audioList.length > 0 && (
               <div className="flex items-center gap-2 border-r border-slate-800 pr-2">
                 <button
@@ -338,17 +341,16 @@ export default function TVPlayer() {
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                       : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
                   }`}
-                  title={isAudioMuted ? 'Ativar Música / Som (M)' : 'Silenciar (M)'}
+                  title={isAudioMuted ? 'Ativar Som (M)' : 'Silenciar (M)'}
                 >
                   {!isAudioMuted ? <Volume2 className="h-4 w-4 text-emerald-400" /> : <VolumeX className="h-4 w-4" />}
-                  <span className="hidden sm:inline truncate max-w-[120px]">
+                  <span className="hidden sm:inline truncate max-w-[130px]">
                     {currentAudio?.title || 'Rádio Interna'}
                   </span>
                 </button>
               </div>
             )}
 
-            {/* Controle de Pausa da Imagem */}
             <button
               onClick={() => setIsPaused((prev) => !prev)}
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800 hover:text-white"
@@ -357,16 +359,14 @@ export default function TVPlayer() {
               {isPaused ? <Play className="h-5 w-5 text-emerald-400" /> : <Pause className="h-5 w-5 text-amber-400" />}
             </button>
 
-            {/* Avançar Slide */}
             <button
               onClick={() => advanceSlide()}
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800 hover:text-white"
-              title="Próxima Oferta"
+              title="Próxima Mídia"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
 
-            {/* Tela Cheia */}
             <button
               onClick={toggleFullscreen}
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md transition-colors hover:bg-cyan-500"
@@ -378,7 +378,7 @@ export default function TVPlayer() {
         )}
       </AnimatePresence>
 
-      {/* Renderização da Mídia com Transição Configurável */}
+      {/* Renderização Visual com Transição Dinâmica */}
       <AnimatePresence mode="wait">
         {currentMedia && (
           <motion.div
@@ -413,7 +413,7 @@ export default function TVPlayer() {
         )}
       </AnimatePresence>
 
-      {/* Barra de Progresso Inferior */}
+      {/* Barra de Progresso */}
       <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/10">
         {!isPaused && (
           <motion.div

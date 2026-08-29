@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, MediaItem, AudioItem, MediaType, TransitionType } from '@/lib/supabaseClient';
+import { supabase, MediaItem, AudioItem, MediaType, TransitionType, parseAudioSource } from '@/lib/supabaseClient';
 import {
   Tv,
   Plus,
@@ -23,6 +23,7 @@ import {
   Wand2,
   Music,
   Volume2,
+  Radio,
 } from 'lucide-react';
 
 const BUCKET_NAME = 'ofertv-media';
@@ -144,7 +145,8 @@ export default function AdminDashboard() {
   const [urlDuration, setUrlDuration] = useState<number>(10);
   const [urlTransition, setUrlTransition] = useState<TransitionType>('fade');
 
-  // Estados de Áudio
+  // Estados de Áudio Multi-Provedor
+  const [audioSourceMode, setAudioSourceMode] = useState<'streaming' | 'upload'>('streaming');
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioTitle, setAudioTitle] = useState<string>('');
   const [audioUrl, setAudioUrl] = useState<string>('');
@@ -245,7 +247,6 @@ export default function AdminDashboard() {
     return new File([blob], `processed-${Date.now()}.webp`, { type: 'image/webp' });
   };
 
-  // Renderizador Tipográfico Preciso no Canvas
   const renderTemplateCanvas = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -452,7 +453,6 @@ export default function AdminDashboard() {
     }
   }, [activeTab, renderTemplateCanvas]);
 
-  // Ação: Publicar Cartaz do Estúdio com Upload Seguro
   const handlePublishTemplate = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -484,9 +484,7 @@ export default function AdminDashboard() {
           upsert: true,
         });
 
-      if (uploadErr) {
-        throw new Error(`Falha no Storage: ${uploadErr.message}`);
-      }
+      if (uploadErr) throw new Error(`Falha no Storage: ${uploadErr.message}`);
 
       const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
       const publicUrl = urlData.publicUrl;
@@ -517,7 +515,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Ação: Upload de Arquivo com Otimização
   const handleUploadFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) {
@@ -584,7 +581,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Ação: Adicionar Faixa de Áudio
+  // Ação: Adicionar Faixa de Áudio (YouTube Music, SoundCloud, MP3 ou Web Rádio)
   const handleAddAudioSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
@@ -594,7 +591,7 @@ export default function AdminDashboard() {
     try {
       setIsSaving(true);
 
-      if (audioFile) {
+      if (audioSourceMode === 'upload' && audioFile) {
         const fileExt = audioFile.name.split('.').pop()?.toLowerCase() || 'mp3';
         const uniqueId = `audio-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const fileName = `audios/${uniqueId}.${fileExt}`;
@@ -614,7 +611,7 @@ export default function AdminDashboard() {
       } else if (audioUrl.trim()) {
         finalAudioUrl = audioUrl.trim();
       } else {
-        setStatusMessage({ type: 'error', text: 'Informe um arquivo de áudio ou uma URL.' });
+        setStatusMessage({ type: 'error', text: 'Informe um link do YouTube, SoundCloud ou selecione um arquivo.' });
         setIsSaving(false);
         return;
       }
@@ -623,7 +620,7 @@ export default function AdminDashboard() {
 
       const { error: dbErr } = await supabase.from('audios').insert([
         {
-          title: audioTitle.trim() || 'Faixa de Áudio',
+          title: audioTitle.trim() || 'Música / Trilha Sonora',
           url: finalAudioUrl,
           order_index: nextIndex,
           is_active: true,
@@ -635,7 +632,7 @@ export default function AdminDashboard() {
       setAudioFile(null);
       setAudioTitle('');
       setAudioUrl('');
-      setStatusMessage({ type: 'success', text: 'Áudio adicionado à playlist da TV!' });
+      setStatusMessage({ type: 'success', text: 'Áudio adicionado à playlist da TV com sucesso!' });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar áudio';
@@ -661,7 +658,7 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('audios').delete().eq('id', audio.id);
       if (error) throw error;
 
-      setStatusMessage({ type: 'success', text: 'Áudio excluído.' });
+      setStatusMessage({ type: 'success', text: 'Áudio excluído da playlist.' });
       await fetchItems();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao excluir áudio';
@@ -774,7 +771,7 @@ export default function AdminDashboard() {
               <h1 className="text-3xl font-bold tracking-tight text-white">OferTV Studio & Sound</h1>
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Estúdio de cartazes digitais, otimização WebP e playlist contínua de áudio para varejo.
+              Estúdio de cartazes, vídeos e rádio interna com suporte a YouTube Music, SoundCloud e MP3.
             </p>
           </div>
           <a
@@ -857,6 +854,7 @@ export default function AdminDashboard() {
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           <div className="lg:col-span-7 space-y-6">
+            {/* ABA DO ESTÚDIO DE CARTAZES */}
             {activeTab === 'template' && (
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <div className="flex items-center justify-between">
@@ -1046,6 +1044,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* ABA DE UPLOAD DE MÍDIA */}
             {activeTab === 'upload' && (
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
@@ -1176,116 +1175,174 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* ABA DE ÁUDIO MULTI-STREAMING */}
             {activeTab === 'audio' && (
               <div className="rounded-xl border border-purple-900/60 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
                     <Music className="h-5 w-5 text-purple-400" />
-                    Trilha Sonora & Rádio Interna
+                    Rádio & Trilha Sonora Multi-Streaming
                   </h2>
                   <span className="text-xs text-purple-300 font-medium bg-purple-950/80 px-3 py-1 rounded-full border border-purple-800">
-                    Áudio Independente
+                    YouTube / SoundCloud / MP3
                   </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-1 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setAudioSourceMode('streaming')}
+                    className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${
+                      audioSourceMode === 'streaming'
+                        ? 'bg-purple-600 text-white shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Radio className="h-4 w-4" />
+                    Link (YouTube Music / SoundCloud / Web Rádio)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAudioSourceMode('upload')}
+                    className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${
+                      audioSourceMode === 'upload'
+                        ? 'bg-purple-600 text-white shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <UploadCloud className="h-4 w-4" />
+                    Upload de Arquivo (MP3/WAV)
+                  </button>
                 </div>
 
                 <form onSubmit={handleAddAudioSubmit} className="space-y-4 rounded-lg bg-slate-950 p-4 border border-slate-800">
                   <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-400">Nome da Faixa / Locução</label>
+                    <label className="block text-xs font-semibold uppercase text-slate-400">Nome da Faixa / Estação</label>
                     <input
                       type="text"
                       value={audioTitle}
                       onChange={(e) => setAudioTitle(e.target.value)}
-                      placeholder="Ex: Música Ambiente / Vinheta Promocional"
+                      placeholder="Ex: Rádio Pop Hits / Vinheta de Ofertas"
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                      Arquivo de Áudio (MP3, WAV, AAC, OGG)
-                    </label>
-                    <input
-                      ref={audioInputRef}
-                      type="file"
-                      accept="audio/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          const file = e.target.files[0];
-                          setAudioFile(file);
-                          if (!audioTitle) setAudioTitle(file.name.replace(/\.[^/.]+$/, ''));
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => audioInputRef.current?.click()}
-                      className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-purple-800 bg-purple-950/20 py-4 text-xs font-semibold text-purple-300 hover:bg-purple-950/40"
-                    >
-                      <Volume2 className="h-4 w-4" />
-                      {audioFile ? `Selecionado: ${audioFile.name}` : 'Selecionar arquivo de áudio'}
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-400">Ou Link URL Direto de Áudio</label>
-                    <input
-                      type="url"
-                      value={audioUrl}
-                      onChange={(e) => setAudioUrl(e.target.value)}
-                      placeholder="https://exemplo.com/musica.mp3"
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
+                  {audioSourceMode === 'streaming' ? (
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-400">
+                        Link do YouTube, YouTube Music ou SoundCloud
+                      </label>
+                      <input
+                        type="url"
+                        value={audioUrl}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAudioUrl(val);
+                          if (!audioTitle) {
+                            if (val.includes('music.youtube.com') || val.includes('youtube.com')) {
+                              setAudioTitle('YouTube Music Stream');
+                            } else if (val.includes('soundcloud.com')) {
+                              setAudioTitle('SoundCloud Stream');
+                            }
+                          }
+                        }}
+                        placeholder="https://music.youtube.com/watch?v=... ou https://soundcloud.com/..."
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                      />
+                      <p className="mt-1.5 text-[11px] text-slate-400">
+                        Cole o link de uma música, vídeo ou playlist do YouTube/SoundCloud.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                        Arquivo de Áudio
+                      </label>
+                      <input
+                        ref={audioInputRef}
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            const file = e.target.files[0];
+                            setAudioFile(file);
+                            if (!audioTitle) setAudioTitle(file.name.replace(/\.[^/.]+$/, ''));
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => audioInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-purple-800 bg-purple-950/20 py-4 text-xs font-semibold text-purple-300 hover:bg-purple-950/40"
+                      >
+                        <Volume2 className="h-4 w-4" />
+                        {audioFile ? `Selecionado: ${audioFile.name}` : 'Clique para selecionar arquivo de áudio'}
+                      </button>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
                     disabled={isSaving}
                     className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 py-3 font-semibold text-white shadow-lg hover:opacity-90 disabled:opacity-50"
                   >
-                    {isSaving ? 'Enviando Áudio...' : 'Adicionar à Playlist de Áudio'}
+                    {isSaving ? 'Gravando...' : 'Adicionar à Playlist da TV'}
                   </button>
                 </form>
 
+                {/* Playlist de Áudio */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Playlist de Áudio ({audioItems.length} faixas)</h3>
+                  <h3 className="text-sm font-semibold text-white">Playlist da Rádio ({audioItems.length} faixas)</h3>
                   {audioItems.length === 0 ? (
                     <p className="text-xs text-slate-500 py-4 text-center">Nenhum áudio cadastrado.</p>
                   ) : (
                     <div className="divide-y divide-slate-800">
-                      {audioItems.map((audio) => (
-                        <div key={audio.id} className="flex items-center justify-between py-3 gap-3">
-                          <div className="flex items-center gap-3">
-                            <Music className="h-4 w-4 text-purple-400 shrink-0" />
-                            <div>
-                              <p className="text-sm font-medium text-white">{audio.title}</p>
-                              <audio src={audio.url} controls className="h-7 w-48 sm:w-64 mt-1" />
+                      {audioItems.map((audio) => {
+                        const parsed = parseAudioSource(audio.url);
+                        return (
+                          <div key={audio.id} className="flex items-center justify-between py-3 gap-3">
+                            <div className="flex items-center gap-3">
+                              <Music className="h-4 w-4 text-purple-400 shrink-0" />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-white">{audio.title}</p>
+                                  <span className="rounded bg-purple-950 px-1.5 py-0.5 text-[10px] font-bold text-purple-300 border border-purple-800 uppercase">
+                                    {parsed.type}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-400 truncate max-w-[280px] mt-0.5">{audio.url}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleToggleAudioStatus(audio)}
+                                className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                                  audio.is_active
+                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                    : 'bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                {audio.is_active ? 'Ativo' : 'Pausado'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAudio(audio)}
+                                className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleToggleAudioStatus(audio)}
-                              className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                                audio.is_active ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'
-                              }`}
-                            >
-                              {audio.is_active ? 'Ativo' : 'Pausado'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAudio(audio)}
-                              className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
+            {/* ABA DE LINK URL */}
             {activeTab === 'url' && (
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-6">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
@@ -1344,6 +1401,7 @@ export default function AdminDashboard() {
             )}
           </div>
 
+          {/* Coluna da Direita: Grade na TV */}
           <div className="lg:col-span-5">
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
