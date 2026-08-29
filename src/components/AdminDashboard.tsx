@@ -114,7 +114,7 @@ export default function AdminDashboard() {
 
   const [activeTab, setActiveTab] = useState<'template' | 'upload' | 'url' | 'audio'>('template');
 
-  // Estados do Estúdio
+  // Estados do Estúdio de Cartazes
   const [productTitle, setProductTitle] = useState<string>('Picanha Bovina Peça');
   const [priceFrom, setPriceFrom] = useState<string>('69,90');
   const [priceTo, setPriceTo] = useState<string>('49,90');
@@ -128,7 +128,7 @@ export default function AdminDashboard() {
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
 
-  // Estados do Upload
+  // Estados do Upload Direto
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState<string>('');
@@ -137,7 +137,7 @@ export default function AdminDashboard() {
   const [uploadDuration, setUploadDuration] = useState<number>(10);
   const [uploadTransition, setUploadTransition] = useState<TransitionType>('fade');
 
-  // Estados de Link URL
+  // Estados do Link URL
   const [customUrl, setCustomUrl] = useState<string>('');
   const [urlTitle, setUrlTitle] = useState<string>('');
   const [urlMediaType, setUrlMediaType] = useState<MediaType>('image');
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
     return new File([blob], `processed-${Date.now()}.webp`, { type: 'image/webp' });
   };
 
-  // Renderizador do Canvas
+  // Renderizador Tipográfico Preciso no Canvas
   const renderTemplateCanvas = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -452,7 +452,7 @@ export default function AdminDashboard() {
     }
   }, [activeTab, renderTemplateCanvas]);
 
-  // Ação: Publicar Cartaz do Estúdio
+  // Ação: Publicar Cartaz do Estúdio com Upload Seguro
   const handlePublishTemplate = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -584,7 +584,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Ação: Adicionar Áudio
+  // Ação: Adicionar Faixa de Áudio
   const handleAddAudioSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
